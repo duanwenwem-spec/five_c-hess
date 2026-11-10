@@ -386,7 +386,7 @@ async function watchRoom(generation) {
       if (generation !== onlineGeneration) return;
       applyOnlineState(state);
       if (state.revision === revision) {
-        await new Promise((resolve) => setTimeout(resolve, 900));
+        await new Promise((resolve) => setTimeout(resolve, 120));
       }
     } catch (error) {
       if (generation !== onlineGeneration) return;
@@ -428,7 +428,23 @@ async function makeOnlineMove(row, col) {
     !onlineSession || thinking || gameOver || onlineSession.status !== "playing"
     || currentPlayer !== onlineSession.player || board[row][col] !== EMPTY
   ) return;
+  const sentRevision = onlineSession.revision;
+  const previousMoveCount = onlineMoveCount;
+  const previousPlayer = currentPlayer;
+  const player = onlineSession.player;
+
+  // Show the move immediately. The authoritative server response below will
+  // confirm it, while a rejected request rolls this preview back.
   thinking = true;
+  board[row][col] = player;
+  onlineMoveCount += 1;
+  currentPlayer = player === BLACK ? WHITE : BLACK;
+  document.querySelectorAll(".cell.last").forEach((cell) => cell.classList.remove("last"));
+  const optimisticCell = cellAt(row, col);
+  optimisticCell.classList.add(player === BLACK ? "black" : "white", "last");
+  optimisticCell.setAttribute("aria-label", `第 ${row + 1} 行，第 ${col + 1} 列，${player === BLACK ? "黑棋" : "白棋"}`);
+  statusMessage = "落子已发送，等待对方";
+  playStoneSound(player);
   updateStatus();
   try {
     const state = await apiJson(`/api/rooms/${onlineSession.code}/move`, {
@@ -437,12 +453,20 @@ async function makeOnlineMove(row, col) {
         token: onlineSession.token,
         row,
         col,
-        revision: onlineSession.revision,
+        revision: sentRevision,
       }),
     });
     applyOnlineState(state);
   } catch (error) {
-    statusMessage = error.message;
+    // Do not undo a move already confirmed by the parallel room watcher.
+    if (onlineSession?.revision === sentRevision) {
+      board[row][col] = EMPTY;
+      onlineMoveCount = previousMoveCount;
+      currentPlayer = previousPlayer;
+      optimisticCell.className = "cell";
+      optimisticCell.setAttribute("aria-label", `第 ${row + 1} 行，第 ${col + 1} 列，空位`);
+      statusMessage = error.message;
+    }
   } finally {
     thinking = false;
     updateStatus();

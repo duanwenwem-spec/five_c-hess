@@ -151,7 +151,26 @@ function snapshot(state, token) {
 }
 
 export class GameRoom {
-  constructor(ctx) { this.ctx = ctx; }
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.waiters = new Set();
+  }
+
+  waitForChange(timeout = 20_000) {
+    return new Promise((resolve) => {
+      const wake = () => {
+        clearTimeout(timer);
+        this.waiters.delete(wake);
+        resolve();
+      };
+      const timer = setTimeout(wake, timeout);
+      this.waiters.add(wake);
+    });
+  }
+
+  notifyWaiters() {
+    for (const wake of [...this.waiters]) wake();
+  }
 
   async fetch(request) {
     const url = new URL(request.url);
@@ -187,13 +206,21 @@ export class GameRoom {
       state.status = "playing";
       state.revision += 1;
       await this.ctx.storage.put("state", state);
+      this.notifyWaiters();
       return json({ ...snapshot(state, token), token });
     }
 
     const token = request.method === "GET" ? url.searchParams.get("token") : body.token;
     const player = tokenPlayer(state, token);
     if (!player) return json({ error: "玩家身份已失效，请重新加入" }, 403);
-    if (action === "state") return json(snapshot(state, token));
+    if (action === "state") {
+      const requestedRevision = Number(url.searchParams.get("revision"));
+      if (Number.isInteger(requestedRevision) && requestedRevision === state.revision) {
+        await this.waitForChange();
+        state = await this.ctx.storage.get("state");
+      }
+      return json(snapshot(state, token));
+    }
 
     if (action === "move") {
       if (state.status !== "playing") return json({ error: "对局尚未开始或已经结束" }, 409);
@@ -226,6 +253,7 @@ export class GameRoom {
 
     state.revision += 1;
     await this.ctx.storage.put("state", state);
+    this.notifyWaiters();
     return json(snapshot(state, token));
   }
 }
