@@ -26,6 +26,16 @@ Windows 用户也可以双击 `启动游戏.bat`。如果系统提示找不到 P
 
 Cloudflare 部署配置位于 `wrangler.jsonc`，房间后端位于 `worker/index.js`。每次推送到 GitHub 主分支后可以自动重新部署。
 
+### `workers.dev` 网络受限时
+
+可以从同一仓库再创建一个 Cloudflare Pages 项目：
+
+- 构建命令：`exit 0`
+- 输出目录：`static`
+- 根目录：留空
+
+首次部署后，在 Pages 项目的 **Settings → Bindings** 中添加 Service binding：变量名为 `BACKEND`，服务选择 `five-c-hess`，然后重新部署。`functions/api/[[path]].js` 会通过 Cloudflare 内部网络转发 API，访问者只需打开新的 `pages.dev` 地址。
+
 ## 本机临时联机（备用）
 
 双击 `启动联机游戏.bat`，程序会自动启动本地服务和 Cloudflare 临时公网通道，并在浏览器打开在线对弈页面。第一次启动需要等待几秒钟。
