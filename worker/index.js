@@ -92,6 +92,34 @@ function chooseAiMove(board, difficulty = "normal") {
     const pool = wins.length ? wins : cells;
     return pool[Math.floor(Math.random() * pool.length)];
   }
+  if (difficulty === "hard") {
+    for (const player of [WHITE, BLACK]) {
+      const urgent = cells.filter(([row, col]) => {
+        board[row][col] = player;
+        const win = hasFive(board, row, col, player);
+        board[row][col] = EMPTY;
+        return win;
+      });
+      if (urgent.length) return urgent[Math.floor(Math.random() * urgent.length)];
+    }
+    const ranked = [...cells].sort((a, b) => moveScore(board, ...b) - moveScore(board, ...a)).slice(0, 32);
+    let bestValue = -Infinity;
+    let bestMoves = [];
+    for (const [row, col] of ranked) {
+      const attack = lineScore(board, row, col, WHITE);
+      const defence = lineScore(board, row, col, BLACK);
+      board[row][col] = WHITE;
+      const replies = candidates(board);
+      const opponentPressure = Math.max(0, ...replies.map(([r, c]) => lineScore(board, r, c, BLACK)));
+      const followUp = Math.max(0, ...replies.map(([r, c]) => lineScore(board, r, c, WHITE)));
+      board[row][col] = EMPTY;
+      const distance = Math.abs(row - 7) + Math.abs(col - 7);
+      const value = attack * 6 + defence * 5 + followUp * 2 - opponentPressure * 2 - distance * 3;
+      if (value > bestValue) { bestValue = value; bestMoves = [[row, col]]; }
+      else if (value === bestValue) bestMoves.push([row, col]);
+    }
+    return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+  }
   const best = Math.max(...cells.map(([r, c]) => moveScore(board, r, c)));
   const pool = cells.filter(([r, c]) => moveScore(board, r, c) === best);
   return pool[Math.floor(Math.random() * pool.length)];
