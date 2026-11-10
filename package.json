@@ -1,0 +1,14 @@
+{
+  "name": "five-c-hess",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "node --check worker/index.js && node --check static/game.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.159.0"
+  }
+}
