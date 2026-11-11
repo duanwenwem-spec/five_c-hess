@@ -11,6 +11,11 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 });
 const blankBoard = () => Array.from({ length: SIZE }, () => Array(SIZE).fill(EMPTY));
 const inBounds = (row, col) => row >= 0 && row < SIZE && col >= 0 && col < SIZE;
+const randomInt = (min, max) => {
+  const value = new Uint32Array(1);
+  crypto.getRandomValues(value);
+  return min + Math.floor((value[0] / 4294967296) * (max - min + 1));
+};
 
 function hasFive(board, row, col, player) {
   if (!inBounds(row, col) || board[row][col] !== player) return false;
@@ -134,7 +139,31 @@ function tokenPlayer(state, token) {
 function snapshot(state, token) {
   const player = tokenPlayer(state, token);
   if (!player) return null;
+  const opponent = player === BLACK ? WHITE : BLACK;
+  if (state.gameType === "bomb") {
+    return {
+      gameType: "bomb",
+      roomCode: state.code,
+      status: state.status,
+      initialMin: state.initialMin,
+      initialMax: state.initialMax,
+      min: state.currentMin,
+      max: state.currentMax,
+      currentPlayer: state.currentPlayer,
+      player,
+      loser: state.loser,
+      bomb: state.status === "finished" ? state.bomb : null,
+      revision: state.revision,
+      guessCount: state.history.length,
+      lastGuess: state.history.at(-1) || null,
+      history: state.history,
+      opponentConnected: Boolean(state.whiteToken),
+      rematchRequested: state.rematchPlayers.includes(player),
+      opponentRematch: state.rematchPlayers.includes(opponent),
+    };
+  }
   return {
+    gameType: "gomoku",
     roomCode: state.code,
     status: state.status,
     board: state.board,
@@ -146,7 +175,7 @@ function snapshot(state, token) {
     lastMove: state.history.at(-1) || null,
     opponentConnected: Boolean(state.whiteToken),
     rematchRequested: state.rematchPlayers.includes(player),
-    opponentRematch: state.rematchPlayers.includes(player === BLACK ? WHITE : BLACK),
+    opponentRematch: state.rematchPlayers.includes(opponent),
   };
 }
 
@@ -182,25 +211,51 @@ export class GameRoom {
     if (action === "create") {
       if (state) return json({ error: "房间号冲突" }, 409);
       const token = crypto.randomUUID();
-      state = {
-        code: body.code,
-        blackToken: token,
-        whiteToken: null,
-        board: blankBoard(),
-        currentPlayer: BLACK,
-        winner: null,
-        status: "waiting",
-        revision: 0,
-        history: [],
-        rematchPlayers: [],
-      };
+      if (body.gameType === "bomb") {
+        const min = Number(body.min);
+        const max = Number(body.max);
+        if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 9999 || max - min < 9) {
+          return json({ error: "请选择至少包含 10 个数字的有效范围" }, 400);
+        }
+        state = {
+          gameType: "bomb",
+          code: body.code,
+          blackToken: token,
+          whiteToken: null,
+          initialMin: min,
+          initialMax: max,
+          currentMin: min,
+          currentMax: max,
+          bomb: randomInt(min, max),
+          currentPlayer: BLACK,
+          loser: null,
+          status: "waiting",
+          revision: 0,
+          history: [],
+          rematchPlayers: [],
+        };
+      } else {
+        state = {
+          gameType: "gomoku",
+          code: body.code,
+          blackToken: token,
+          whiteToken: null,
+          board: blankBoard(),
+          currentPlayer: BLACK,
+          winner: null,
+          status: "waiting",
+          revision: 0,
+          history: [],
+          rematchPlayers: [],
+        };
+      }
       await this.ctx.storage.put("state", state);
       return json({ ...snapshot(state, token), token }, 201);
     }
     if (!state) return json({ error: "房间不存在或已经过期" }, 404);
 
     if (action === "join") {
-      if (state.whiteToken) return json({ error: "房间人数已满" }, 409);
+      if (state.whiteToken || state.status !== "waiting") return json({ error: "房间人数已满或已经结束" }, 409);
       const token = crypto.randomUUID();
       state.whiteToken = token;
       state.status = "playing";
@@ -222,7 +277,9 @@ export class GameRoom {
       return json(snapshot(state, token));
     }
 
+    const gameType = state.gameType || "gomoku";
     if (action === "move") {
+      if (gameType !== "gomoku") return json({ error: "当前房间不是五子棋房间" }, 409);
       if (state.status !== "playing") return json({ error: "对局尚未开始或已经结束" }, 409);
       if (state.currentPlayer !== player) return json({ error: "还没有轮到你落子" }, 409);
       if (body.revision !== state.revision) return json({ error: "棋局状态已更新，请重试" }, 409);
@@ -234,20 +291,48 @@ export class GameRoom {
       if (hasFive(state.board, row, col, player)) { state.winner = player; state.status = "finished"; }
       else if (state.history.length === SIZE * SIZE) { state.winner = EMPTY; state.status = "finished"; }
       else state.currentPlayer = player === BLACK ? WHITE : BLACK;
+    } else if (action === "guess") {
+      if (gameType !== "bomb") return json({ error: "当前房间不是数字炸弹房间" }, 409);
+      if (state.status !== "playing") return json({ error: "对局尚未开始或已经结束" }, 409);
+      if (state.currentPlayer !== player) return json({ error: "还没有轮到你猜数字" }, 409);
+      if (body.revision !== state.revision) return json({ error: "游戏状态已更新，请重试" }, 409);
+      const guess = Number(body.guess);
+      if (!Number.isInteger(guess) || guess < state.currentMin || guess > state.currentMax) {
+        return json({ error: `请输入 ${state.currentMin}—${state.currentMax} 之间的整数` }, 400);
+      }
+      const hit = guess === state.bomb;
+      const direction = hit ? "boom" : guess < state.bomb ? "higher" : "lower";
+      state.history.push({ player, guess, hit, direction });
+      if (hit) {
+        state.loser = player;
+        state.status = "finished";
+      } else {
+        if (direction === "higher") state.currentMin = guess + 1;
+        else state.currentMax = guess - 1;
+        state.currentPlayer = player === BLACK ? WHITE : BLACK;
+      }
     } else if (action === "resign" || action === "leave") {
-      state.winner = player === BLACK ? WHITE : BLACK;
+      if (gameType === "bomb") state.loser = player;
+      else state.winner = player === BLACK ? WHITE : BLACK;
       state.status = "finished";
     } else if (action === "rematch") {
       if (state.status !== "finished") return json({ error: "对局结束后才能再来一局" }, 409);
       if (!state.rematchPlayers.includes(player)) state.rematchPlayers.push(player);
       if (state.rematchPlayers.length === 2) {
         [state.blackToken, state.whiteToken] = [state.whiteToken, state.blackToken];
-        state.board = blankBoard();
         state.currentPlayer = BLACK;
-        state.winner = null;
         state.status = "playing";
         state.history = [];
         state.rematchPlayers = [];
+        if (gameType === "bomb") {
+          state.currentMin = state.initialMin;
+          state.currentMax = state.initialMax;
+          state.bomb = randomInt(state.initialMin, state.initialMax);
+          state.loser = null;
+        } else {
+          state.board = blankBoard();
+          state.winner = null;
+        }
       }
     } else return json({ error: "接口不存在" }, 404);
 
@@ -276,19 +361,26 @@ async function handleApi(request, env) {
     }
     return json({ move: move ? { row: move[0], col: move[1] } : null, winner });
   }
-  if (url.pathname === "/api/rooms" && request.method === "POST") {
+  if ((url.pathname === "/api/rooms" || url.pathname === "/api/bomb-rooms") && request.method === "POST") {
+    const gameType = url.pathname === "/api/bomb-rooms" ? "bomb" : "gomoku";
+    const body = gameType === "bomb" ? await request.json().catch(() => ({})) : {};
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = roomCode();
-      const stub = env.ROOMS.get(env.ROOMS.idFromName(code));
-      const response = await stub.fetch("https://room/create", { method: "POST", body: JSON.stringify({ code }) });
+      const name = gameType === "bomb" ? `BOMB:${code}` : code;
+      const stub = env.ROOMS.get(env.ROOMS.idFromName(name));
+      const response = await stub.fetch("https://room/create", {
+        method: "POST",
+        body: JSON.stringify({ code, gameType, min: body.min, max: body.max }),
+      });
       if (response.status !== 409) return response;
     }
     return json({ error: "暂时无法创建房间，请重试" }, 503);
   }
-  const match = url.pathname.match(/^\/api\/rooms\/([A-Z2-9]{6})\/(join|state|move|resign|rematch|leave)$/);
+  const match = url.pathname.match(/^\/api\/(rooms|bomb-rooms)\/([A-Z2-9]{6})\/(join|state|move|guess|resign|rematch|leave)$/);
   if (!match) return json({ error: "接口不存在" }, 404);
-  const stub = env.ROOMS.get(env.ROOMS.idFromName(match[1]));
-  const target = new URL(`https://room/${match[2]}`);
+  const name = match[1] === "bomb-rooms" ? `BOMB:${match[2]}` : match[2];
+  const stub = env.ROOMS.get(env.ROOMS.idFromName(name));
+  const target = new URL(`https://room/${match[3]}`);
   target.search = url.search;
   return stub.fetch(new Request(target, request));
 }

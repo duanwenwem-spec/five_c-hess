@@ -6,6 +6,7 @@ from app import (
     EMPTY,
     WHITE,
     ApiError,
+    BombRoomManager,
     RoomManager,
     choose_ai_move,
     has_five,
@@ -83,6 +84,21 @@ class GomokuTests(unittest.TestCase):
         room, _ = manager.create()
         with self.assertRaises(ApiError):
             room.snapshot("not-a-real-token")
+
+    def test_bomb_room_hides_answer_until_finished(self):
+        manager = BombRoomManager()
+        room, host_token = manager.create(1, 10)
+        self.assertIsNone(room.snapshot(host_token)["bomb"])
+        _, guest_token = manager.join(room.code)
+        self.assertIsNone(room.snapshot(guest_token)["bomb"])
+
+        room.status = "finished"
+        room.loser = BLACK
+        self.assertEqual(room.snapshot(host_token)["bomb"], room.bomb)
+
+    def test_bomb_room_rejects_too_small_range(self):
+        with self.assertRaises(ApiError):
+            BombRoomManager().create(1, 5)
 
 
 if __name__ == "__main__":

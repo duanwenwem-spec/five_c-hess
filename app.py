@@ -28,6 +28,9 @@ MAX_ACTIVE_ROOMS = 200
 ROOM_PATH = re.compile(
     r"^/api/rooms/(?P<code>[A-Z2-9]{6})(?:/(?P<action>join|state|move|resign|rematch|leave))?$"
 )
+BOMB_ROOM_PATH = re.compile(
+    r"^/api/bomb-rooms/(?P<code>[A-Z2-9]{6})(?:/(?P<action>join|state|guess|rematch|leave))?$"
+)
 
 
 def in_bounds(row: int, col: int) -> bool:
@@ -363,6 +366,137 @@ class RoomManager:
 ROOMS = RoomManager()
 
 
+@dataclass
+class BombRoom:
+    code: str
+    black_token: str
+    initial_min: int
+    initial_max: int
+    white_token: str | None = None
+    current_min: int = field(init=False)
+    current_max: int = field(init=False)
+    bomb: int = field(init=False)
+    current_player: int = BLACK
+    loser: int | None = None
+    status: str = "waiting"
+    revision: int = 0
+    history: list[dict[str, object]] = field(default_factory=list)
+    rematch_players: set[int] = field(default_factory=set)
+    last_seen: dict[int, float] = field(default_factory=dict)
+    updated_at: float = field(default_factory=time.monotonic)
+    lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
+    condition: threading.Condition = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.condition = threading.Condition(self.lock)
+        self.last_seen[BLACK] = time.monotonic()
+        self.reset_round()
+
+    def reset_round(self) -> None:
+        self.current_min = self.initial_min
+        self.current_max = self.initial_max
+        self.bomb = self.initial_min + secrets.randbelow(self.initial_max - self.initial_min + 1)
+        self.current_player = BLACK
+        self.loser = None
+        self.history.clear()
+
+    def player_for(self, token: str) -> int:
+        if secrets.compare_digest(token, self.black_token):
+            return BLACK
+        if self.white_token and secrets.compare_digest(token, self.white_token):
+            return WHITE
+        raise ApiError("玩家身份已失效，请重新加入", 403)
+
+    def touch(self, player: int) -> None:
+        now = time.monotonic()
+        self.last_seen[player] = now
+        self.updated_at = now
+
+    def changed(self) -> None:
+        self.revision += 1
+        self.updated_at = time.monotonic()
+        self.condition.notify_all()
+
+    def snapshot(self, token: str) -> dict[str, object]:
+        player = self.player_for(token)
+        self.touch(player)
+        opponent = WHITE if player == BLACK else BLACK
+        return {
+            "gameType": "bomb",
+            "roomCode": self.code,
+            "status": self.status,
+            "initialMin": self.initial_min,
+            "initialMax": self.initial_max,
+            "min": self.current_min,
+            "max": self.current_max,
+            "currentPlayer": self.current_player,
+            "player": player,
+            "loser": self.loser,
+            "bomb": self.bomb if self.status == "finished" else None,
+            "revision": self.revision,
+            "guessCount": len(self.history),
+            "lastGuess": self.history[-1] if self.history else None,
+            "history": self.history,
+            "opponentConnected": (
+                opponent in self.last_seen
+                and time.monotonic() - self.last_seen[opponent] < 35
+            ),
+            "rematchRequested": player in self.rematch_players,
+            "opponentRematch": opponent in self.rematch_players,
+        }
+
+
+class BombRoomManager:
+    def __init__(self) -> None:
+        self.rooms: dict[str, BombRoom] = {}
+        self.lock = threading.RLock()
+
+    def _cleanup(self) -> None:
+        cutoff = time.monotonic() - ROOM_TTL_SECONDS
+        for code, room in list(self.rooms.items()):
+            if room.updated_at < cutoff:
+                del self.rooms[code]
+
+    def create(self, minimum: int, maximum: int) -> tuple[BombRoom, str]:
+        if minimum < 1 or maximum > 9999 or maximum - minimum < 9:
+            raise ApiError("请选择至少包含 10 个数字的有效范围")
+        with self.lock:
+            self._cleanup()
+            if len(self.rooms) >= MAX_ACTIVE_ROOMS:
+                raise ApiError("当前房间数量已达上限，请稍后重试", 503)
+            while True:
+                code = "".join(secrets.choice(ROOM_CODE_CHARS) for _ in range(ROOM_CODE_LENGTH))
+                if code not in self.rooms:
+                    break
+            token = secrets.token_urlsafe(32)
+            room = BombRoom(code, token, minimum, maximum)
+            self.rooms[code] = room
+            return room, token
+
+    def get(self, code: str) -> BombRoom:
+        with self.lock:
+            self._cleanup()
+            room = self.rooms.get(code.upper())
+        if room is None:
+            raise ApiError("房间不存在或已经过期", 404)
+        return room
+
+    def join(self, code: str) -> tuple[BombRoom, str]:
+        room = self.get(code)
+        with room.lock:
+            if room.white_token is not None or room.status != "waiting":
+                raise ApiError("房间人数已满或已经结束", 409)
+            token = secrets.token_urlsafe(32)
+            room.white_token = token
+            room.status = "playing"
+            room.last_seen[WHITE] = time.monotonic()
+            room.changed()
+            return room, token
+
+
+BOMB_ROOMS = BombRoomManager()
+
+
 class GomokuHandler(SimpleHTTPRequestHandler):
     def translate_path(self, path: str) -> str:
         clean_path = path.split("?", 1)[0].split("#", 1)[0].lstrip("/")
@@ -380,7 +514,8 @@ class GomokuHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - required by BaseHTTPRequestHandler
         parsed = urlsplit(self.path)
-        match = ROOM_PATH.match(parsed.path)
+        bomb_match = BOMB_ROOM_PATH.match(parsed.path)
+        match = bomb_match or ROOM_PATH.match(parsed.path)
         if match and match.group("action") == "state":
             try:
                 query = parse_qs(parsed.query)
@@ -391,7 +526,7 @@ class GomokuHandler(SimpleHTTPRequestHandler):
                     revision = int(query.get("revision", ["-1"])[0])
                 except ValueError as exc:
                     raise ApiError("无效的棋局版本") from exc
-                room = ROOMS.get(match.group("code"))
+                room = (BOMB_ROOMS if bomb_match else ROOMS).get(match.group("code"))
                 with room.condition:
                     room.player_for(token)
                     if room.revision == revision:
@@ -417,6 +552,49 @@ class GomokuHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/rooms":
                 room, token = ROOMS.create()
                 self._send_json(201, {**room.snapshot(token), "token": token})
+                return
+            if parsed.path == "/api/bomb-rooms":
+                minimum, maximum = payload.get("min"), payload.get("max")
+                if not isinstance(minimum, int) or not isinstance(maximum, int):
+                    raise ApiError("请输入整数范围")
+                room, token = BOMB_ROOMS.create(minimum, maximum)
+                self._send_json(201, {**room.snapshot(token), "token": token})
+                return
+
+            bomb_match = BOMB_ROOM_PATH.match(parsed.path)
+            if bomb_match:
+                action = bomb_match.group("action")
+                code = bomb_match.group("code")
+                if action == "join":
+                    room, token = BOMB_ROOMS.join(code)
+                    self._send_json(200, {**room.snapshot(token), "token": token})
+                    return
+                if action not in {"guess", "rematch", "leave"}:
+                    raise ApiError("接口不存在", 404)
+                token = payload.get("token")
+                if not isinstance(token, str) or not token:
+                    raise ApiError("缺少玩家身份", 401)
+                room = BOMB_ROOMS.get(code)
+                with room.condition:
+                    player = room.player_for(token)
+                    room.touch(player)
+                    if action == "guess":
+                        self._handle_bomb_guess(room, player, payload)
+                    elif action == "rematch":
+                        if room.status != "finished":
+                            raise ApiError("对局结束后才能再来一局", 409)
+                        room.rematch_players.add(player)
+                        if room.rematch_players == {BLACK, WHITE}:
+                            room.black_token, room.white_token = room.white_token, room.black_token
+                            room.reset_round()
+                            room.status = "playing"
+                            room.rematch_players.clear()
+                        room.changed()
+                    else:
+                        room.loser = player
+                        room.status = "finished"
+                        room.changed()
+                    self._send_json(200, room.snapshot(token))
                 return
 
             match = ROOM_PATH.match(parsed.path)
@@ -525,6 +703,33 @@ class GomokuHandler(SimpleHTTPRequestHandler):
             room.current_player = WHITE if player == BLACK else BLACK
         room.changed()
 
+    def _handle_bomb_guess(
+        self, room: BombRoom, player: int, payload: dict[str, object]
+    ) -> None:
+        if room.status != "playing":
+            raise ApiError("对局尚未开始或已经结束", 409)
+        if room.current_player != player:
+            raise ApiError("还没有轮到你猜数字", 409)
+        if payload.get("revision") != room.revision:
+            raise ApiError("游戏状态已更新，请重试", 409)
+        guess = payload.get("guess")
+        if not isinstance(guess, int) or not room.current_min <= guess <= room.current_max:
+            raise ApiError(f"请输入 {room.current_min}—{room.current_max} 之间的整数")
+
+        hit = guess == room.bomb
+        direction = "boom" if hit else "higher" if guess < room.bomb else "lower"
+        room.history.append({"player": player, "guess": guess, "hit": hit, "direction": direction})
+        if hit:
+            room.loser = player
+            room.status = "finished"
+        else:
+            if direction == "higher":
+                room.current_min = guess + 1
+            else:
+                room.current_max = guess - 1
+            room.current_player = WHITE if player == BLACK else BLACK
+        room.changed()
+
     def _send_json(self, status: int, payload: dict[str, object]) -> None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -539,7 +744,7 @@ class GomokuHandler(SimpleHTTPRequestHandler):
 
 def run(host: str = "0.0.0.0", port: int = 8000) -> None:
     server = ThreadingHTTPServer((host, port), GomokuHandler)
-    print(f"五子棋已启动：http://127.0.0.1:{port}")
+    print(f"方寸游局已启动：http://127.0.0.1:{port}")
     print("手机访问：请将 127.0.0.1 替换为这台电脑的局域网 IP")
     try:
         server.serve_forever()

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#9f3d31" />
+    <meta name="description" content="支持单人与好友在线对战的数字炸弹游戏" />
+    <title>数字炸弹 · 方寸游局</title>
+    <link rel="stylesheet" href="/bomb.css?v=20261111.1" />
+  </head>
+  <body>
+    <main class="bomb-shell">
+      <header class="bomb-header">
+        <a class="back-link" href="/" aria-label="返回游戏大厅">← <span>游戏大厅</span></a>
+        <div class="bomb-brand"><strong>数字炸弹</strong><small>NUMBER BOMB</small></div>
+        <span class="header-rule">猜数字 · 缩范围 · 别踩雷</span>
+      </header>
+
+      <section class="setup-view" id="setupView">
+        <div class="setup-visual" aria-hidden="true">
+          <span class="floating-card c1">12</span><span class="floating-card c2">67</span><span class="floating-card c3">94</span>
+          <div class="hero-bomb"><i></i><span>?</span></div>
+          <p>每一次猜测，都离答案更近一步。</p>
+        </div>
+
+        <div class="setup-card">
+          <p class="kicker">NEW ROUND</p>
+          <h1>设置一局游戏</h1>
+          <p class="setup-description">秘密数字藏在范围中。双方轮流猜测，范围逐步缩小，猜中炸弹的人输掉本局。</p>
+
+          <div class="mode-tabs" role="group" aria-label="游戏模式">
+            <button class="active" type="button" data-bomb-mode="solo" aria-pressed="true"><strong>单人挑战</strong><small>与电脑轮流猜</small></button>
+            <button type="button" data-bomb-mode="online" aria-pressed="false"><strong>好友联机</strong><small>创建或加入房间</small></button>
+          </div>
+
+          <div class="range-settings" id="rangeSettings">
+            <div class="field-heading"><label>选择数字范围</label><span>最多 9999</span></div>
+            <div class="range-presets" aria-label="常用范围">
+              <button type="button" data-range="1,50">1—50</button>
+              <button class="active" type="button" data-range="1,100">1—100</button>
+              <button type="button" data-range="1,500">1—500</button>
+            </div>
+            <div class="range-inputs">
+              <label><span>最小值</span><input id="minInput" type="number" inputmode="numeric" min="1" max="9989" value="1" /></label>
+              <span class="range-dash">—</span>
+              <label><span>最大值</span><input id="maxInput" type="number" inputmode="numeric" min="11" max="9999" value="100" /></label>
+            </div>
+          </div>
+
+          <p class="setup-error" id="setupError" role="alert"></p>
+          <button class="start-button" id="startSolo" type="button"><span>开始单人游戏</span><b aria-hidden="true">→</b></button>
+
+          <div class="online-actions" id="onlineActions" hidden>
+            <button class="start-button" id="createBombRoom" type="button"><span>创建在线房间</span><b aria-hidden="true">＋</b></button>
+            <div class="join-divider"><span>已有房间号</span></div>
+            <div class="join-form">
+              <input id="bombRoomInput" type="text" maxlength="6" autocomplete="off" placeholder="输入六位房间号" aria-label="六位房间号" />
+              <button id="joinBombRoom" type="button">加入</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="game-view" id="gameView" hidden aria-label="数字炸弹游戏区">
+        <div class="game-topline">
+          <button class="text-button" id="exitGame" type="button">← 返回设置</button>
+          <div class="room-info" id="roomInfo" hidden>
+            <span class="connection-dot" id="bombConnectionDot"></span>
+            <span>房间</span>
+            <button id="bombRoomCode" type="button" title="复制房间号">------</button>
+            <button class="copy-link" id="copyBombInvite" type="button">复制邀请链接</button>
+          </div>
+          <span class="round-count">第 <strong id="guessCount">0</strong> 次猜测</span>
+        </div>
+
+        <div class="play-layout">
+          <section class="bomb-stage">
+            <div class="turn-pill" id="turnPill"><i></i><span id="turnLabel">轮到你猜</span></div>
+            <p class="stage-label">炸弹就在这个范围内</p>
+            <div class="current-range" aria-live="polite"><strong id="currentMin">1</strong><span>—</span><strong id="currentMax">100</strong></div>
+            <div class="range-track" aria-hidden="true"><span id="rangeTrack"></span><i class="track-bomb">✦</i></div>
+            <p class="last-clue" id="lastClue">输入一个数字，试探它的位置</p>
+
+            <form class="guess-form" id="guessForm">
+              <input id="guessInput" type="number" inputmode="numeric" autocomplete="off" aria-label="输入猜测数字" placeholder="输入数字" />
+              <button id="guessButton" type="submit">确认猜测</button>
+            </form>
+            <p class="game-error" id="gameError" role="alert"></p>
+          </section>
+
+          <aside class="game-sidebar">
+            <div class="players-card">
+              <div class="bomb-player active" id="playerOne"><span class="avatar">你</span><div><strong id="playerOneName">你</strong><small>先手</small></div><i></i></div>
+              <div class="versus">VS</div>
+              <div class="bomb-player" id="playerTwo"><span class="avatar alt">机</span><div><strong id="playerTwoName">电脑</strong><small id="playerTwoState">等待</small></div><i></i></div>
+            </div>
+            <div class="history-card">
+              <div class="history-heading"><strong>猜测记录</strong><button id="newBombGame" type="button">重新开始</button></div>
+              <ol id="guessHistory"><li class="empty-history">还没有人猜数字</li></ol>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <div class="result-backdrop" id="bombResult" hidden>
+      <section class="result-card" role="dialog" aria-modal="true" aria-labelledby="bombResultTitle">
+        <div class="result-bomb" id="resultBomb"><i></i>!</div>
+        <p class="kicker">BOOM!</p>
+        <h2 id="bombResultTitle">踩中炸弹</h2>
+        <p id="bombResultText">炸弹数字是 42</p>
+        <button class="start-button" id="bombPlayAgain" type="button"><span>再来一局</span><b aria-hidden="true">↻</b></button>
+        <button class="result-exit" id="resultExit" type="button">返回设置</button>
+      </section>
+    </div>
+
+    <script src="/bomb.js?v=20261111.1" defer></script>
+  </body>
+</html>

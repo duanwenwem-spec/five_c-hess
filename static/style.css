@@ -46,6 +46,8 @@ button { font: inherit; }
 }
 
 .brand-lockup { display: flex; align-items: baseline; gap: 10px; }
+.back-home { color: var(--muted); font: 20px/1 ui-sans-serif, system-ui, sans-serif; text-decoration: none; transition: color .2s, transform .2s; }
+.back-home:hover { color: var(--vermillion); transform: translateX(-2px); }
 .brand-subtitle { color: var(--vermillion); font: 600 9px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .2em; }
 .eyebrow { margin: 0 0 3px; color: var(--vermillion); font: 600 11px/1.2 ui-sans-serif, system-ui, sans-serif; letter-spacing: .22em; }
 

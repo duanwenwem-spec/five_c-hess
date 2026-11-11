@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "check": "node --check worker/index.js && node --check static/game.js"
+    "check": "node --check worker/index.js && node --check static/game.js && node --check static/bomb.js"
   },
   "devDependencies": {
     "wrangler": "^4.159.0"
