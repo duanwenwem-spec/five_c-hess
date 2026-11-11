@@ -6,21 +6,18 @@
     <meta name="theme-color" content="#17231f" />
     <meta name="description" content="一款简洁、适配手机与电脑的五子棋小游戏" />
     <title>弈 · 五子棋</title>
-    <link rel="stylesheet" href="/style.css?v=20261110.2" />
+    <link rel="stylesheet" href="/style.css?v=20261111.1" />
   </head>
   <body>
     <main class="app-shell">
       <header class="masthead">
         <div class="brand-lockup">
-          <span class="brand-mark" aria-hidden="true">弈</span>
-          <div>
-            <p class="eyebrow">GOMOKU · 五子连珠</p>
-            <h1>方寸之间，落子成局</h1>
-          </div>
+          <h1>弈 · 五子棋</h1>
+          <span class="brand-subtitle">GOMOKU</span>
         </div>
-        <button class="icon-button sound-button" id="soundButton" type="button" aria-label="关闭落子音效" title="落子音效">
-          <span aria-hidden="true" class="sound-on">♪</span>
-          <span aria-hidden="true" class="sound-off">×</span>
+        <button class="icon-button sound-button muted" id="soundButton" type="button" aria-label="播放背景音乐" aria-pressed="false" title="播放背景音乐">
+          <span aria-hidden="true" class="sound-on">♫</span>
+          <span aria-hidden="true" class="sound-off">♪</span>
         </button>
       </header>
 
@@ -41,23 +38,11 @@
         </div>
 
         <aside class="control-panel">
-          <div class="intro">
-            <span class="seal" aria-hidden="true">五</span>
-            <div>
-              <p class="intro-title">落子无悔，五子成势</p>
-              <p class="intro-copy">执黑先行，横、竖或斜线率先连成五子即胜。</p>
-            </div>
-          </div>
-
           <p class="section-label">对局模式</p>
           <div class="mode-picker" aria-label="对局模式">
             <button class="mode active" type="button" data-mode="ai">
               <span class="mode-icon" aria-hidden="true">机</span>
               <span><strong>人机对弈</strong><small>挑战电脑白棋</small></span>
-            </button>
-            <button class="mode" type="button" data-mode="local">
-              <span class="mode-icon" aria-hidden="true">双</span>
-              <span><strong>双人对弈</strong><small>同屏轮流落子</small></span>
             </button>
             <button class="mode" type="button" data-mode="online">
               <span class="mode-icon" aria-hidden="true">联</span>
@@ -142,6 +127,6 @@
       </section>
     </div>
 
-    <script src="/game.js?v=20261110.2" defer></script>
+    <script src="/game.js?v=20261111.1" defer></script>
   </body>
 </html>

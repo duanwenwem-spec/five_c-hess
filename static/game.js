@@ -41,11 +41,15 @@ let currentPlayer = BLACK;
 let gameOver = false;
 let thinking = false;
 let soundEnabled = true;
+let musicEnabled = false;
 let mode = "ai";
 let difficulty = "normal";
 let history = [];
 let requestVersion = 0;
 let audioContext;
+let musicGain;
+let musicTimer;
+let musicStep = 0;
 let statusMessage = "";
 let onlineSession = null;
 let onlineMoveCount = 0;
@@ -530,7 +534,7 @@ function cellAt(row, col) {
 function playStoneSound(player) {
   if (!soundEnabled) return;
   try {
-    audioContext ||= new AudioContext();
+    audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gain = audioContext.createGain();
     oscillator.type = "sine";
@@ -541,6 +545,65 @@ function playStoneSound(player) {
     oscillator.start();
     oscillator.stop(audioContext.currentTime + 0.08);
   } catch (_) { /* Sound is optional. */ }
+}
+
+// A quiet, original pentatonic loop synthesized in the browser. It needs no
+// external audio file, starts immediately after a click, and is safe to share.
+const MUSIC_NOTES = [293.66, 369.99, 440, 493.88, 587.33, 493.88, 440, 369.99, 329.63, 369.99, 440, 293.66];
+
+function updateMusicButton() {
+  soundButton.classList.toggle("muted", !musicEnabled);
+  soundButton.setAttribute("aria-label", musicEnabled ? "暂停背景音乐" : "播放背景音乐");
+  soundButton.setAttribute("aria-pressed", String(musicEnabled));
+  soundButton.title = musicEnabled ? "暂停背景音乐" : "播放背景音乐";
+}
+
+function playMusicNote() {
+  if (!musicEnabled || !audioContext || !musicGain) return;
+  const now = audioContext.currentTime;
+  const oscillator = audioContext.createOscillator();
+  const noteGain = audioContext.createGain();
+  oscillator.type = "sine";
+  oscillator.frequency.setValueAtTime(MUSIC_NOTES[musicStep % MUSIC_NOTES.length], now);
+  noteGain.gain.setValueAtTime(0.0001, now);
+  noteGain.gain.exponentialRampToValueAtTime(0.23, now + 0.08);
+  noteGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
+  oscillator.connect(noteGain).connect(musicGain);
+  oscillator.start(now);
+  oscillator.stop(now + 1.4);
+  musicStep += 1;
+}
+
+async function startBackgroundMusic() {
+  try {
+    audioContext ||= new (window.AudioContext || window.webkitAudioContext)();
+    await audioContext.resume();
+    musicGain = audioContext.createGain();
+    musicGain.gain.setValueAtTime(0.075, audioContext.currentTime);
+    musicGain.connect(audioContext.destination);
+    musicEnabled = true;
+    musicStep = 0;
+    playMusicNote();
+    musicTimer = window.setInterval(playMusicNote, 760);
+  } catch (_) {
+    musicEnabled = false;
+  }
+  updateMusicButton();
+}
+
+function stopBackgroundMusic() {
+  musicEnabled = false;
+  window.clearInterval(musicTimer);
+  musicTimer = undefined;
+  if (musicGain && audioContext) {
+    const oldGain = musicGain;
+    oldGain.gain.cancelScheduledValues(audioContext.currentTime);
+    oldGain.gain.setValueAtTime(Math.max(oldGain.gain.value, 0.0001), audioContext.currentTime);
+    oldGain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.2);
+    window.setTimeout(() => oldGain.disconnect(), 250);
+  }
+  musicGain = undefined;
+  updateMusicButton();
 }
 
 document.querySelectorAll(".mode").forEach((button) => {
@@ -596,10 +659,23 @@ document.querySelector("#copyInvite").addEventListener("click", async () => {
   await navigator.clipboard.writeText(invite).catch(() => {});
   roomStatus.textContent = "邀请链接已复制";
 });
-soundButton.addEventListener("click", () => {
-  soundEnabled = !soundEnabled;
-  soundButton.classList.toggle("muted", !soundEnabled);
-  soundButton.setAttribute("aria-label", soundEnabled ? "关闭落子音效" : "打开落子音效");
+soundButton.addEventListener("click", async () => {
+  if (musicEnabled) stopBackgroundMusic();
+  else await startBackgroundMusic();
+});
+document.addEventListener("visibilitychange", () => {
+  if (!audioContext || !musicEnabled) return;
+  if (document.hidden) {
+    window.clearInterval(musicTimer);
+    musicTimer = undefined;
+    audioContext.suspend().catch(() => {});
+  } else {
+    audioContext.resume().then(() => {
+      if (!musicEnabled || musicTimer) return;
+      playMusicNote();
+      musicTimer = window.setInterval(playMusicNote, 760);
+    }).catch(() => {});
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "r" && !event.ctrlKey && !event.metaKey && mode !== "online") resetGame();
