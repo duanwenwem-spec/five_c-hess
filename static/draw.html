@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#385f58" />
+    <meta name="description" content="支持单人猜图与好友在线作画的你画我猜" />
+    <title>你画我猜 · 方寸游局</title>
+    <link rel="stylesheet" href="/draw.css?v=20261112.1" />
+  </head>
+  <body>
+    <main class="draw-shell">
+      <header class="draw-header">
+        <a href="/" class="back-link">← <span>游戏大厅</span></a>
+        <div class="draw-brand"><strong>你画我猜</strong><small>DRAW &amp; GUESS</small></div>
+        <span class="header-copy">一笔一画，心有灵犀</span>
+      </header>
+
+      <section class="draw-setup" id="drawSetup">
+        <div class="setup-sketch" aria-hidden="true">
+          <svg viewBox="0 0 520 430" role="img">
+            <path d="M84 306 C132 235 188 214 247 238 C312 264 342 218 410 143" />
+            <path d="M389 151 L421 123 L412 166" />
+            <circle cx="165" cy="147" r="66" />
+            <path d="M132 145 Q165 174 198 145 M143 125 L151 117 M180 117 L188 125" />
+            <path d="M106 357 Q255 315 418 349" />
+          </svg>
+          <span class="sketch-note n1">猜猜看？</span><span class="sketch-note n2">两个人更好玩</span>
+        </div>
+        <div class="setup-panel">
+          <p class="eyebrow">NEW GAME</p>
+          <h1>把答案画出来</h1>
+          <p class="setup-intro">不能写字，也不能说答案。用最简单的线条，让对方猜中你心里的那个词。</p>
+          <div class="mode-choice" role="group" aria-label="游戏模式">
+            <button class="active" data-draw-mode="solo" type="button" aria-pressed="true"><span>猜</span><strong>单人猜图</strong><small>系统逐笔作画</small></button>
+            <button data-draw-mode="online" type="button" aria-pressed="false"><span>联</span><strong>好友联机</strong><small>轮流画与猜</small></button>
+          </div>
+          <button class="main-button" id="startDrawSolo" type="button"><span>开始猜图</span><b>→</b></button>
+          <div class="draw-online-actions" id="drawOnlineActions" hidden>
+            <button class="main-button" id="createDrawRoom" type="button"><span>创建在线房间</span><b>＋</b></button>
+            <div class="join-divider"><span>或输入好友房间号</span></div>
+            <div class="join-form"><input id="drawRoomInput" maxlength="6" autocomplete="off" placeholder="六位房间号" aria-label="六位房间号" /><button id="joinDrawRoom" type="button">加入</button></div>
+          </div>
+          <p class="setup-error" id="drawSetupError" role="alert"></p>
+        </div>
+      </section>
+
+      <section class="draw-game" id="drawGame" hidden>
+        <div class="game-bar">
+          <button class="plain-button" id="exitDrawGame" type="button">← 返回模式选择</button>
+          <div class="draw-room-info" id="drawRoomInfo" hidden><i id="drawConnectionDot"></i><span>房间</span><button id="drawRoomCode" type="button">------</button><button id="copyDrawInvite" type="button">复制邀请链接</button></div>
+          <div class="timer"><span>剩余时间</span><strong id="drawTimer">60</strong><small>秒</small></div>
+        </div>
+
+        <div class="draw-layout">
+          <section class="canvas-panel">
+            <div class="canvas-heading">
+              <div><p id="drawRoleLabel">系统正在画</p><strong id="drawWordDisplay">_ _</strong></div>
+              <span id="drawCategory">类别：物品</span>
+            </div>
+            <div class="canvas-wrap" id="canvasWrap"><canvas id="drawingCanvas" width="900" height="560" aria-label="你画我猜画板"></canvas><div class="canvas-waiting" id="drawWaiting" hidden><span>等待好友加入</span><small>把房间号发给朋友吧</small></div></div>
+            <div class="drawing-tools" id="drawingTools" hidden>
+              <span><i></i> 按住并拖动画笔</span>
+              <button id="clearCanvas" type="button">清空画板</button>
+            </div>
+            <form class="draw-guess-form" id="drawGuessForm">
+              <input id="drawGuessInput" maxlength="20" autocomplete="off" placeholder="输入你猜到的词" aria-label="猜词答案" />
+              <button id="submitDrawGuess" type="submit">提交答案</button>
+            </form>
+            <p class="game-error" id="drawGameError" role="alert"></p>
+          </section>
+
+          <aside class="draw-sidebar">
+            <div class="role-card">
+              <div class="role-player active" id="drawPlayerOne"><span>1</span><div><strong id="drawPlayerOneName">系统</strong><small id="drawPlayerOneRole">作画</small></div></div>
+              <div class="role-arrow">→</div>
+              <div class="role-player" id="drawPlayerTwo"><span>2</span><div><strong id="drawPlayerTwoName">你</strong><small id="drawPlayerTwoRole">猜词</small></div></div>
+            </div>
+            <div class="guess-log-card">
+              <div class="log-heading"><strong>猜词动态</strong><span id="strokeCount">0 笔</span></div>
+              <ul id="drawGuessLog"><li class="empty-log">答案正在画布上慢慢出现</li></ul>
+            </div>
+            <div class="hint-card"><span>提示</span><p id="drawHint">观察线条，也许答案就在细节里。</p></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <div class="draw-result-backdrop" id="drawResult" hidden>
+      <section class="draw-result-card" role="dialog" aria-modal="true" aria-labelledby="drawResultTitle">
+        <span class="result-mark" id="drawResultMark">✓</span><p class="eyebrow">ROUND OVER</p>
+        <h2 id="drawResultTitle">猜对了</h2><p id="drawResultText">答案是“太阳”</p>
+        <button class="main-button" id="drawPlayAgain" type="button"><span>再来一题</span><b>↻</b></button>
+        <button class="result-exit" id="drawResultExit" type="button">返回模式选择</button>
+      </section>
+    </div>
+    <script src="/draw.js?v=20261112.1" defer></script>
+  </body>
+</html>

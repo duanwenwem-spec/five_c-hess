@@ -63,6 +63,18 @@ body {
 .bomb-orb i { position: absolute; width: 9px; height: 9px; left: -1px; top: -16px; border-radius: 50%; background: #ffd96a; box-shadow: 0 0 11px #ffd96a; }
 .range-line { position: absolute; z-index: 1; left: 50%; top: 50%; transform: translate(-50%,-50%) rotate(-3deg); color: rgba(255,255,255,.86); font: 700 14px ui-sans-serif, system-ui, sans-serif; letter-spacing: .1em; white-space: nowrap; }
 
+.draw-preview { display: grid; place-items: center; background: repeating-linear-gradient(0deg, rgba(56,95,88,.045) 0 1px, transparent 1px 25px), #fffaf0; }
+.draw-preview svg { width: 88%; fill: none; stroke: #365f56; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+.draw-preview > span { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%) rotate(-3deg); padding: 7px 10px; border: 1px solid rgba(54,95,86,.2); color: #365f56; background: rgba(255,255,255,.75); font-size: 10px; white-space: nowrap; }
+.coin-preview { background: linear-gradient(155deg, #315e50, #17342d); }
+.coin-preview::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 20% 14%, rgba(255,255,255,.14), transparent 24%), repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 1px, transparent 1px 9px); }
+.hub-coin { position: absolute; z-index: 1; width: 53px; height: 53px; display: grid; place-items: center; border: 5px solid #b57d19; border-radius: 50%; color: #96620d; background: radial-gradient(circle at 32% 25%, #fff1a5, #d4a13a 67%); font: 700 18px Georgia, serif; box-shadow: 0 11px 20px rgba(0,0,0,.2); }
+.hub-coin.hc1 { left: 14%; top: 10%; transform: rotate(-8deg); }.hub-coin.hc2 { right: 12%; top: 23%; width: 46px; height: 46px; font-size: 15px; }.hub-coin.hc3 { left: 28%; top: 45%; width: 40px; height: 40px; border-width: 4px; font-size: 14px; }
+.hub-bomb { position: absolute; z-index: 1; right: 24%; top: 49%; width: 61px; height: 61px; display: grid; place-items: center; border-radius: 50%; color: #f3e7ca; background: radial-gradient(circle at 32% 25%, #53625c, #101a16 66%); font: 700 21px Georgia, serif; box-shadow: 0 13px 23px rgba(0,0,0,.28); }
+.hub-bomb::before { content: ""; position: absolute; width: 30px; height: 18px; left: 2px; top: -13px; border: 5px solid #d4a13a; border-width: 5px 0 0 5px; border-radius: 80% 0 0; }.hub-bomb i { position: absolute; left: -2px; top: -17px; width: 8px; height: 8px; border-radius: 50%; background: #ffd76a; box-shadow: 0 0 10px #ffd76a; }
+.hub-basket { position: absolute; z-index: 1; left: 50%; bottom: 19px; width: 142px; height: 54px; transform: translateX(-50%); border-radius: 6px 6px 30px 30px; background: linear-gradient(90deg, #7e4529, #b96f40 50%, #7e4529); box-shadow: 0 14px 24px rgba(0,0,0,.2); }
+.hub-basket::before, .hub-basket::after { content: ""; position: absolute; top: -16px; width: 10px; height: 42px; border-radius: 8px; background: #6b3b24; }.hub-basket::before { left: 19px; transform: rotate(-27deg); }.hub-basket::after { right: 19px; transform: rotate(27deg); }
+
 .hub-footer { display: flex; justify-content: center; gap: 12px; padding-top: 30px; color: rgba(20,35,30,.42); font: 10px ui-sans-serif, system-ui, sans-serif; letter-spacing: .08em; }
 
 @media (max-width: 850px) {

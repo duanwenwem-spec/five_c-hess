@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#17342d" />
+    <meta name="description" content="支持单人与好友在线竞速的接金币游戏" />
+    <title>接金币 · 方寸游局</title>
+    <link rel="stylesheet" href="/coin.css?v=20261112.1" />
+  </head>
+  <body>
+    <main class="coin-shell">
+      <header class="coin-header">
+        <a href="/" class="back-link">← <span>游戏大厅</span></a>
+        <div class="coin-brand"><strong>接金币</strong><small>GOLD RUSH</small></div>
+        <span class="header-copy">接住好运，避开炸弹</span>
+      </header>
+
+      <section class="coin-setup" id="coinSetup">
+        <div class="coin-hero" aria-hidden="true">
+          <div class="falling-coin f1">¥</div><div class="falling-coin f2">★</div><div class="falling-coin f3">¥</div>
+          <div class="falling-bomb"><i></i>!</div>
+          <div class="hero-basket"><span></span></div>
+          <div class="motion-line m1"></div><div class="motion-line m2"></div><div class="motion-line m3"></div>
+        </div>
+        <div class="setup-panel">
+          <p class="eyebrow">READY TO CATCH</p>
+          <h1>接住每一枚金币</h1>
+          <p class="setup-intro">移动篮子接住金币，普通金币 +10，星星金币 +20；碰到炸弹会扣 15 分。</p>
+          <div class="rule-row"><span><i class="mini-coin">¥</i><b>+10</b> 普通金币</span><span><i class="mini-star">★</i><b>+20</b> 星星金币</span><span><i class="mini-bomb">!</i><b>−15</b> 炸弹</span></div>
+          <div class="mode-choice" role="group" aria-label="游戏模式">
+            <button class="active" data-coin-mode="solo" type="button" aria-pressed="true"><span>单</span><strong>单人挑战</strong><small>45 秒冲击高分</small></button>
+            <button data-coin-mode="online" type="button" aria-pressed="false"><span>竞</span><strong>好友竞速</strong><small>同一关卡比得分</small></button>
+          </div>
+          <button class="main-button" id="startCoinSolo" type="button"><span>开始挑战</span><b>→</b></button>
+          <div id="coinOnlineActions" hidden>
+            <button class="main-button" id="createCoinRoom" type="button"><span>创建竞速房间</span><b>＋</b></button>
+            <div class="join-divider"><span>或输入好友房间号</span></div>
+            <div class="join-form"><input id="coinRoomInput" maxlength="6" autocomplete="off" placeholder="六位房间号" aria-label="六位房间号" /><button id="joinCoinRoom" type="button">加入</button></div>
+          </div>
+          <p class="setup-error" id="coinSetupError" role="alert"></p>
+        </div>
+      </section>
+
+      <section class="coin-game" id="coinGame" hidden>
+        <div class="game-bar">
+          <button class="plain-button" id="exitCoinGame" type="button">← 返回模式选择</button>
+          <div class="coin-room-info" id="coinRoomInfo" hidden><i id="coinConnectionDot"></i><span>房间</span><button id="coinRoomCode" type="button">------</button><button id="copyCoinInvite" type="button">复制邀请链接</button></div>
+          <span class="control-tip">鼠标 / 触摸拖动 · 键盘 ← →</span>
+        </div>
+        <div class="arena-layout">
+          <section class="arena-panel">
+            <div class="score-strip">
+              <div><span>你的分数</span><strong id="coinScore">0</strong></div>
+              <div class="time-box"><span>剩余</span><strong id="coinTimer">45.0</strong><small>秒</small></div>
+              <div><span id="coinOpponentLabel">最高纪录</span><strong id="coinOpponentScore">0</strong></div>
+            </div>
+            <div class="arena-wrap" id="arenaWrap">
+              <canvas id="coinCanvas" width="900" height="560" aria-label="接金币游戏区域"></canvas>
+              <div class="arena-overlay" id="coinWaiting"><strong>等待好友加入</strong><small>加入后双方会同时开始</small></div>
+              <div class="countdown" id="coinCountdown" hidden>3</div>
+            </div>
+            <div class="mobile-controls"><button id="moveLeft" type="button" aria-label="向左移动">←</button><span>拖动画面也可以移动篮子</span><button id="moveRight" type="button" aria-label="向右移动">→</button></div>
+          </section>
+          <aside class="coin-sidebar">
+            <div class="race-card"><p>实时排名</p><div class="racer active" id="meRacer"><span>我</span><div><strong>你</strong><small>正在接金币</small></div><b id="meRaceScore">0</b></div><div class="race-divider">VS</div><div class="racer" id="otherRacer"><span>友</span><div><strong id="otherRacerName">本机纪录</strong><small id="otherRaceState">努力刷新吧</small></div><b id="otherRaceScore">0</b></div></div>
+            <div class="combo-card"><span>COMBO</span><strong id="comboCount">× 0</strong><p>连续接住金币可以保持连击，碰到炸弹会清零。</p></div>
+            <div class="event-card"><strong>本局动态</strong><ul id="coinEvents"><li>准备好你的篮子</li></ul></div>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <div class="coin-result-backdrop" id="coinResult" hidden>
+      <section class="coin-result-card" role="dialog" aria-modal="true" aria-labelledby="coinResultTitle">
+        <div class="result-medal">★</div><p class="eyebrow">TIME UP</p><h2 id="coinResultTitle">挑战完成</h2><p id="coinResultText">本局获得 120 分</p>
+        <div class="result-scores" id="coinResultScores"><span>你的分数 <b>0</b></span><span>好友分数 <b>0</b></span></div>
+        <button class="main-button" id="coinPlayAgain" type="button"><span>再来一局</span><b>↻</b></button><button class="result-exit" id="coinResultExit" type="button">返回模式选择</button>
+      </section>
+    </div>
+    <script src="/coin.js?v=20261112.1" defer></script>
+  </body>
+</html>

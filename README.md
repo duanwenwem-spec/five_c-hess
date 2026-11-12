@@ -1,11 +1,13 @@
 # 方寸游局
 
-一个无需下载、适配手机与电脑的轻量游戏站。目前包含五子棋和数字炸弹，两个游戏都支持单人挑战与好友在线房间。
+一个无需下载、适配手机与电脑的轻量游戏站。目前包含五子棋、数字炸弹、你画我猜和接金币，四款游戏都支持单人挑战与好友在线房间。
 
 ## 游戏
 
 - **五子棋**：入门、普通、困难三档电脑难度，也可创建六位房间号在线对弈。
 - **数字炸弹**：自定义 1—9999 内的初始范围，与电脑或好友轮流猜数；每次猜测都会缩小范围，猜中炸弹者失败。
+- **你画我猜**：单人模式观察系统逐笔作画并猜词；联机模式由双方轮流作画和猜词。
+- **接金币**：45 秒内移动篮子接金币并避开炸弹；联机双方使用相同关卡实时竞速。
 
 ## 对弈难度
 
@@ -68,6 +70,8 @@ python -m unittest -v
 - `static/index.html`、`static/hub.css`：游戏选择大厅
 - `static/gomoku.html`、`static/game.js`、`static/style.css`：五子棋页面
 - `static/bomb.html`、`static/bomb.js`、`static/bomb.css`：数字炸弹页面
+- `static/draw.html`、`static/draw.js`、`static/draw.css`：你画我猜页面
+- `static/coin.html`、`static/coin.js`、`static/coin.css`：接金币页面
 - `static/style.css`：电脑/手机响应式界面
 - `static/game.js`：棋盘交互与前端状态管理
 - `test_app.py`：规则和 AI 的基础自动化测试

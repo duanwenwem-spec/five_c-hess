@@ -4,6 +4,16 @@ const BLACK = 1;
 const WHITE = 2;
 const DIRECTIONS = [[1, 0], [0, 1], [1, 1], [1, -1]];
 const ROOM_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const DRAW_DURATION = 90_000;
+const COIN_DURATION = 45_000;
+const DRAW_WORDS = [
+  { word: "太阳", category: "自然" }, { word: "房子", category: "建筑" },
+  { word: "小鱼", category: "动物" }, { word: "雨伞", category: "物品" },
+  { word: "苹果", category: "食物" }, { word: "小猫", category: "动物" },
+  { word: "帆船", category: "交通" }, { word: "大树", category: "植物" },
+  { word: "眼镜", category: "物品" }, { word: "雪人", category: "自然" },
+  { word: "蛋糕", category: "食物" }, { word: "汽车", category: "交通" },
+];
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -16,6 +26,21 @@ const randomInt = (min, max) => {
   crypto.getRandomValues(value);
   return min + Math.floor((value[0] / 4294967296) * (max - min + 1));
 };
+const newDrawWord = () => DRAW_WORDS[randomInt(0, DRAW_WORDS.length - 1)];
+
+function expireTimedGame(state) {
+  if (state.status !== "playing" || !state.deadline || Date.now() < state.deadline) return false;
+  state.status = "finished";
+  state.endReason = "timeout";
+  if (state.gameType === "draw") state.winner = null;
+  if (state.gameType === "coin") {
+    state.winner = state.scores[BLACK] === state.scores[WHITE]
+      ? EMPTY
+      : state.scores[BLACK] > state.scores[WHITE] ? BLACK : WHITE;
+  }
+  state.revision += 1;
+  return true;
+}
 
 function hasFive(board, row, col, player) {
   if (!inBounds(row, col) || board[row][col] !== player) return false;
@@ -140,6 +165,48 @@ function snapshot(state, token) {
   const player = tokenPlayer(state, token);
   if (!player) return null;
   const opponent = player === BLACK ? WHITE : BLACK;
+  if (state.gameType === "draw") {
+    const isDrawer = player === state.drawer;
+    return {
+      gameType: "draw",
+      roomCode: state.code,
+      status: state.status,
+      player,
+      drawer: state.drawer,
+      isDrawer,
+      word: isDrawer || state.status === "finished" ? state.word : null,
+      wordLength: [...state.word].length,
+      category: state.category,
+      strokes: state.strokes,
+      guesses: state.guesses.slice(-20),
+      deadline: state.deadline,
+      winner: state.winner,
+      endReason: state.endReason,
+      revision: state.revision,
+      opponentConnected: Boolean(state.whiteToken),
+      rematchRequested: state.rematchPlayers.includes(player),
+      opponentRematch: state.rematchPlayers.includes(opponent),
+    };
+  }
+  if (state.gameType === "coin") {
+    return {
+      gameType: "coin",
+      roomCode: state.code,
+      status: state.status,
+      player,
+      seed: state.seed,
+      startedAt: state.startedAt,
+      deadline: state.deadline,
+      score: state.scores[player],
+      opponentScore: state.scores[opponent],
+      scores: state.scores,
+      winner: state.winner,
+      revision: state.revision,
+      opponentConnected: Boolean(state.whiteToken),
+      rematchRequested: state.rematchPlayers.includes(player),
+      opponentRematch: state.rematchPlayers.includes(opponent),
+    };
+  }
   if (state.gameType === "bomb") {
     return {
       gameType: "bomb",
@@ -211,7 +278,42 @@ export class GameRoom {
     if (action === "create") {
       if (state) return json({ error: "房间号冲突" }, 409);
       const token = crypto.randomUUID();
-      if (body.gameType === "bomb") {
+      if (body.gameType === "draw") {
+        const selected = newDrawWord();
+        state = {
+          gameType: "draw",
+          code: body.code,
+          blackToken: token,
+          whiteToken: null,
+          drawer: BLACK,
+          word: selected.word,
+          category: selected.category,
+          strokes: [],
+          guesses: [],
+          winner: null,
+          endReason: null,
+          deadline: null,
+          status: "waiting",
+          revision: 0,
+          rematchPlayers: [],
+        };
+      } else if (body.gameType === "coin") {
+        state = {
+          gameType: "coin",
+          code: body.code,
+          blackToken: token,
+          whiteToken: null,
+          seed: randomInt(1, 2_000_000_000),
+          scores: { [BLACK]: 0, [WHITE]: 0 },
+          finishedPlayers: [],
+          winner: null,
+          startedAt: null,
+          deadline: null,
+          status: "waiting",
+          revision: 0,
+          rematchPlayers: [],
+        };
+      } else if (body.gameType === "bomb") {
         const min = Number(body.min);
         const max = Number(body.max);
         if (!Number.isInteger(min) || !Number.isInteger(max) || min < 1 || max > 9999 || max - min < 9) {
@@ -259,6 +361,11 @@ export class GameRoom {
       const token = crypto.randomUUID();
       state.whiteToken = token;
       state.status = "playing";
+      if (state.gameType === "draw") state.deadline = Date.now() + DRAW_DURATION;
+      if (state.gameType === "coin") {
+        state.startedAt = Date.now() + 1_500;
+        state.deadline = state.startedAt + COIN_DURATION;
+      }
       state.revision += 1;
       await this.ctx.storage.put("state", state);
       this.notifyWaiters();
@@ -269,15 +376,29 @@ export class GameRoom {
     const player = tokenPlayer(state, token);
     if (!player) return json({ error: "玩家身份已失效，请重新加入" }, 403);
     if (action === "state") {
+      if (expireTimedGame(state)) {
+        await this.ctx.storage.put("state", state);
+        this.notifyWaiters();
+      }
       const requestedRevision = Number(url.searchParams.get("revision"));
       if (Number.isInteger(requestedRevision) && requestedRevision === state.revision) {
-        await this.waitForChange();
+        const untilDeadline = state.deadline ? Math.max(50, state.deadline - Date.now()) : 20_000;
+        await this.waitForChange(Math.min(20_000, untilDeadline));
         state = await this.ctx.storage.get("state");
+        if (expireTimedGame(state)) {
+          await this.ctx.storage.put("state", state);
+          this.notifyWaiters();
+        }
       }
       return json(snapshot(state, token));
     }
 
     const gameType = state.gameType || "gomoku";
+    if ((gameType === "draw" || gameType === "coin") && expireTimedGame(state)) {
+      await this.ctx.storage.put("state", state);
+      this.notifyWaiters();
+      return json(snapshot(state, token));
+    }
     if (action === "move") {
       if (gameType !== "gomoku") return json({ error: "当前房间不是五子棋房间" }, 409);
       if (state.status !== "playing") return json({ error: "对局尚未开始或已经结束" }, 409);
@@ -291,45 +412,112 @@ export class GameRoom {
       if (hasFive(state.board, row, col, player)) { state.winner = player; state.status = "finished"; }
       else if (state.history.length === SIZE * SIZE) { state.winner = EMPTY; state.status = "finished"; }
       else state.currentPlayer = player === BLACK ? WHITE : BLACK;
-    } else if (action === "guess") {
-      if (gameType !== "bomb") return json({ error: "当前房间不是数字炸弹房间" }, 409);
-      if (state.status !== "playing") return json({ error: "对局尚未开始或已经结束" }, 409);
-      if (state.currentPlayer !== player) return json({ error: "还没有轮到你猜数字" }, 409);
-      if (body.revision !== state.revision) return json({ error: "游戏状态已更新，请重试" }, 409);
-      const guess = Number(body.guess);
-      if (!Number.isInteger(guess) || guess < state.currentMin || guess > state.currentMax) {
-        return json({ error: `请输入 ${state.currentMin}—${state.currentMax} 之间的整数` }, 400);
+    } else if (action === "draw") {
+      if (gameType !== "draw") return json({ error: "当前房间不是你画我猜房间" }, 409);
+      if (state.status !== "playing" || state.drawer !== player) return json({ error: "当前不能作画" }, 409);
+      if (body.revision !== state.revision) return json({ error: "画板已更新，请重试" }, 409);
+      if (!Array.isArray(body.stroke) || body.stroke.length < 2 || body.stroke.length > 240) return json({ error: "无效的画笔轨迹" }, 400);
+      const stroke = body.stroke.map((point) => ({
+        x: Math.round(Number(point.x) * 10_000) / 10_000,
+        y: Math.round(Number(point.y) * 10_000) / 10_000,
+      }));
+      if (stroke.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y) || point.x < 0 || point.x > 1 || point.y < 0 || point.y > 1)) {
+        return json({ error: "画笔轨迹超出画板" }, 400);
       }
-      const hit = guess === state.bomb;
-      const direction = hit ? "boom" : guess < state.bomb ? "higher" : "lower";
-      state.history.push({ player, guess, hit, direction });
-      if (hit) {
-        state.loser = player;
+      const totalPoints = state.strokes.reduce((sum, item) => sum + item.length, 0);
+      if (state.strokes.length >= 160 || totalPoints + stroke.length > 5_000) return json({ error: "画板内容太多，请先清空" }, 409);
+      state.strokes.push(stroke);
+    } else if (action === "clear") {
+      if (gameType !== "draw" || state.drawer !== player || state.status !== "playing") return json({ error: "当前不能清空画板" }, 409);
+      state.strokes = [];
+    } else if (action === "guess") {
+      if (gameType === "draw") {
+        if (state.status !== "playing" || state.drawer === player) return json({ error: "当前不能猜词" }, 409);
+        const guess = String(body.guess || "").trim().slice(0, 20);
+        if (!guess) return json({ error: "请输入你的答案" }, 400);
+        const correct = guess.replace(/\s/g, "").toLowerCase() === state.word.replace(/\s/g, "").toLowerCase();
+        state.guesses.push({ player, text: guess, correct });
+        if (state.guesses.length > 50) state.guesses.shift();
+        if (correct) {
+          state.winner = player;
+          state.status = "finished";
+          state.endReason = "correct";
+        }
+      } else if (gameType === "bomb") {
+        if (state.status !== "playing") return json({ error: "对局尚未开始或已经结束" }, 409);
+        if (state.currentPlayer !== player) return json({ error: "还没有轮到你猜数字" }, 409);
+        if (body.revision !== state.revision) return json({ error: "游戏状态已更新，请重试" }, 409);
+        const guess = Number(body.guess);
+        if (!Number.isInteger(guess) || guess < state.currentMin || guess > state.currentMax) {
+          return json({ error: `请输入 ${state.currentMin}—${state.currentMax} 之间的整数` }, 400);
+        }
+        const hit = guess === state.bomb;
+        const direction = hit ? "boom" : guess < state.bomb ? "higher" : "lower";
+        state.history.push({ player, guess, hit, direction });
+        if (hit) {
+          state.loser = player;
+          state.status = "finished";
+        } else {
+          if (direction === "higher") state.currentMin = guess + 1;
+          else state.currentMax = guess - 1;
+          state.currentPlayer = player === BLACK ? WHITE : BLACK;
+        }
+      } else return json({ error: "当前房间不支持猜词" }, 409);
+    } else if (action === "score") {
+      if (gameType !== "coin" || state.status !== "playing") return json({ error: "当前不能更新分数" }, 409);
+      const score = Number(body.score);
+      if (!Number.isInteger(score) || score < -1_000 || score > 20_000) return json({ error: "无效的分数" }, 400);
+      state.scores[player] = score;
+    } else if (action === "finish") {
+      if (gameType !== "coin" || state.status !== "playing") return json({ error: "本局已经结束" }, 409);
+      const score = Number(body.score);
+      if (Number.isInteger(score)) state.scores[player] = Math.max(-1_000, Math.min(20_000, score));
+      if (!state.finishedPlayers.includes(player)) state.finishedPlayers.push(player);
+      if (state.finishedPlayers.length === 2 || Date.now() >= state.deadline) {
         state.status = "finished";
-      } else {
-        if (direction === "higher") state.currentMin = guess + 1;
-        else state.currentMax = guess - 1;
-        state.currentPlayer = player === BLACK ? WHITE : BLACK;
+        state.winner = state.scores[BLACK] === state.scores[WHITE]
+          ? EMPTY
+          : state.scores[BLACK] > state.scores[WHITE] ? BLACK : WHITE;
       }
     } else if (action === "resign" || action === "leave") {
       if (gameType === "bomb") state.loser = player;
       else state.winner = player === BLACK ? WHITE : BLACK;
+      if (gameType === "draw" || gameType === "coin") state.endReason = "leave";
       state.status = "finished";
     } else if (action === "rematch") {
       if (state.status !== "finished") return json({ error: "对局结束后才能再来一局" }, 409);
       if (!state.rematchPlayers.includes(player)) state.rematchPlayers.push(player);
       if (state.rematchPlayers.length === 2) {
         [state.blackToken, state.whiteToken] = [state.whiteToken, state.blackToken];
-        state.currentPlayer = BLACK;
         state.status = "playing";
-        state.history = [];
         state.rematchPlayers = [];
         if (gameType === "bomb") {
+          state.currentPlayer = BLACK;
+          state.history = [];
           state.currentMin = state.initialMin;
           state.currentMax = state.initialMax;
           state.bomb = randomInt(state.initialMin, state.initialMax);
           state.loser = null;
+        } else if (gameType === "draw") {
+          const selected = newDrawWord();
+          state.drawer = BLACK;
+          state.word = selected.word;
+          state.category = selected.category;
+          state.strokes = [];
+          state.guesses = [];
+          state.winner = null;
+          state.endReason = null;
+          state.deadline = Date.now() + DRAW_DURATION;
+        } else if (gameType === "coin") {
+          state.seed = randomInt(1, 2_000_000_000);
+          state.scores = { [BLACK]: 0, [WHITE]: 0 };
+          state.finishedPlayers = [];
+          state.winner = null;
+          state.startedAt = Date.now() + 1_500;
+          state.deadline = state.startedAt + COIN_DURATION;
         } else {
+          state.currentPlayer = BLACK;
+          state.history = [];
           state.board = blankBoard();
           state.winner = null;
         }
@@ -361,12 +549,18 @@ async function handleApi(request, env) {
     }
     return json({ move: move ? { row: move[0], col: move[1] } : null, winner });
   }
-  if ((url.pathname === "/api/rooms" || url.pathname === "/api/bomb-rooms") && request.method === "POST") {
-    const gameType = url.pathname === "/api/bomb-rooms" ? "bomb" : "gomoku";
+  const roomTypes = {
+    "/api/rooms": "gomoku",
+    "/api/bomb-rooms": "bomb",
+    "/api/draw-rooms": "draw",
+    "/api/coin-rooms": "coin",
+  };
+  if (roomTypes[url.pathname] && request.method === "POST") {
+    const gameType = roomTypes[url.pathname];
     const body = gameType === "bomb" ? await request.json().catch(() => ({})) : {};
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = roomCode();
-      const name = gameType === "bomb" ? `BOMB:${code}` : code;
+      const name = gameType === "gomoku" ? code : `${gameType.toUpperCase()}:${code}`;
       const stub = env.ROOMS.get(env.ROOMS.idFromName(name));
       const response = await stub.fetch("https://room/create", {
         method: "POST",
@@ -376,9 +570,11 @@ async function handleApi(request, env) {
     }
     return json({ error: "暂时无法创建房间，请重试" }, 503);
   }
-  const match = url.pathname.match(/^\/api\/(rooms|bomb-rooms)\/([A-Z2-9]{6})\/(join|state|move|guess|resign|rematch|leave)$/);
+  const match = url.pathname.match(/^\/api\/(rooms|bomb-rooms|draw-rooms|coin-rooms)\/([A-Z2-9]{6})\/(join|state|move|guess|draw|clear|score|finish|resign|rematch|leave)$/);
   if (!match) return json({ error: "接口不存在" }, 404);
-  const name = match[1] === "bomb-rooms" ? `BOMB:${match[2]}` : match[2];
+  const routeTypes = { rooms: "gomoku", "bomb-rooms": "bomb", "draw-rooms": "draw", "coin-rooms": "coin" };
+  const gameType = routeTypes[match[1]];
+  const name = gameType === "gomoku" ? match[2] : `${gameType.toUpperCase()}:${match[2]}`;
   const stub = env.ROOMS.get(env.ROOMS.idFromName(name));
   const target = new URL(`https://room/${match[3]}`);
   target.search = url.search;
