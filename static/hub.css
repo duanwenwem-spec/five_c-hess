@@ -14,37 +14,25 @@ body {
   min-height: 100svh;
   color: var(--ink);
   background:
-    radial-gradient(circle at 12% 8%, rgba(255,255,255,.92), transparent 31%),
-    radial-gradient(circle at 88% 86%, rgba(194,151,84,.14), transparent 29%),
-    repeating-linear-gradient(90deg, rgba(49,54,43,.025) 0 1px, transparent 1px 7px),
+    radial-gradient(circle at 12% 8%, rgba(255,255,255,.76), transparent 32%),
+    repeating-linear-gradient(90deg, rgba(49,54,43,.018) 0 1px, transparent 1px 8px),
     var(--paper);
 }
 
-.hub-shell { width: min(1120px, calc(100% - 48px)); min-height: 100svh; margin: auto; padding: 24px 0 30px; }
+.hub-shell { width: min(1120px, calc(100% - 48px)); min-height: 100svh; margin: auto; padding: 18px 0 34px; }
 .hub-header { display: flex; align-items: center; justify-content: space-between; min-height: 64px; border-bottom: 1px solid rgba(20,35,30,.18); }
-.hub-brand { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
-.hub-brand > span:last-child { display: grid; gap: 3px; }
+.hub-brand { display: flex; align-items: center; gap: 11px; color: inherit; text-decoration: none; }
 .hub-brand strong { font-size: 19px; letter-spacing: .12em; }
-.hub-brand small { color: var(--red); font: 600 8px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .18em; }
 .hub-seal { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid rgba(165,66,51,.65); color: var(--red); font-size: 21px; box-shadow: inset 0 0 0 3px var(--paper), inset 0 0 0 4px rgba(165,66,51,.2); }
-.online-note { display: inline-flex; align-items: center; gap: 8px; color: rgba(20,35,30,.62); font: 11px ui-sans-serif, system-ui, sans-serif; }
-.online-note i { width: 6px; height: 6px; border-radius: 50%; background: #3f8067; box-shadow: 0 0 0 4px rgba(63,128,103,.12); }
 
-.hero { padding: clamp(46px, 8vh, 82px) 0 clamp(30px, 5vh, 48px); text-align: center; }
-.hero-kicker { margin: 0 0 12px; color: var(--red); font: 700 9px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .32em; }
-.hero h1 { margin: 0; font-size: clamp(32px, 5vw, 56px); font-weight: 500; letter-spacing: .12em; }
-.hero > p:last-child { margin: 17px auto 0; color: rgba(20,35,30,.62); font: 13px/1.8 ui-sans-serif, system-ui, sans-serif; }
-
-.game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
-.game-card { min-height: 330px; display: grid; grid-template-columns: 44% 56%; overflow: hidden; border: 1px solid rgba(20,35,30,.15); color: inherit; background: rgba(255,255,255,.38); text-decoration: none; box-shadow: 0 16px 40px rgba(45,40,28,.08); transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
-.game-card:hover { transform: translateY(-6px); border-color: rgba(20,35,30,.42); box-shadow: 0 25px 55px rgba(45,40,28,.15); }
+.game-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; padding-top: 28px; }
+.game-card { min-height: 285px; display: grid; grid-template-columns: 44% 56%; overflow: hidden; border: 1px solid rgba(20,35,30,.15); color: inherit; background: rgba(255,255,255,.3); text-decoration: none; box-shadow: 0 8px 22px rgba(45,40,28,.06); transition: transform .2s ease, border-color .2s ease; }
+.game-card:hover { transform: translateY(-2px); border-color: rgba(20,35,30,.42); }
 .card-visual { position: relative; min-height: 100%; overflow: hidden; }
-.card-content { position: relative; padding: 38px 32px 32px; display: flex; flex-direction: column; }
-.card-number { position: absolute; right: 25px; top: 20px; color: rgba(20,35,30,.09); font: 700 42px/1 Georgia, serif; }
-.card-type { margin: 0 0 30px; color: var(--red); font: 600 9px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: .18em; }
-.card-content h2 { margin: 0 0 14px; font-size: 30px; font-weight: 600; letter-spacing: .08em; }
+.card-content { position: relative; padding: 34px 30px 27px; display: flex; flex-direction: column; }
+.card-content h2 { margin: 0 0 15px; font-size: 28px; font-weight: 600; letter-spacing: .06em; }
 .card-content > p:not(.card-type) { margin: 0; color: rgba(20,35,30,.64); font: 12px/1.85 ui-sans-serif, system-ui, sans-serif; }
-.enter-game { margin-top: auto; padding-top: 30px; display: flex; align-items: center; justify-content: space-between; color: var(--ink); font-size: 13px; letter-spacing: .12em; border-bottom: 1px solid rgba(20,35,30,.23); padding-bottom: 8px; }
+.enter-game { margin-top: auto; padding-top: 25px; display: flex; align-items: center; justify-content: space-between; color: var(--ink); font-size: 12px; letter-spacing: .08em; border-bottom: 1px solid rgba(20,35,30,.2); padding-bottom: 7px; }
 .enter-game b { font: 400 22px/1 ui-sans-serif, system-ui, sans-serif; transition: transform .2s; }
 .game-card:hover .enter-game b { transform: translateX(5px); }
 
@@ -75,26 +63,18 @@ body {
 .hub-basket { position: absolute; z-index: 1; left: 50%; bottom: 19px; width: 142px; height: 54px; transform: translateX(-50%); border-radius: 6px 6px 30px 30px; background: linear-gradient(90deg, #7e4529, #b96f40 50%, #7e4529); box-shadow: 0 14px 24px rgba(0,0,0,.2); }
 .hub-basket::before, .hub-basket::after { content: ""; position: absolute; top: -16px; width: 10px; height: 42px; border-radius: 8px; background: #6b3b24; }.hub-basket::before { left: 19px; transform: rotate(-27deg); }.hub-basket::after { right: 19px; transform: rotate(27deg); }
 
-.hub-footer { display: flex; justify-content: center; gap: 12px; padding-top: 30px; color: rgba(20,35,30,.42); font: 10px ui-sans-serif, system-ui, sans-serif; letter-spacing: .08em; }
-
 @media (max-width: 850px) {
   .hub-shell { width: min(620px, calc(100% - 28px)); padding-top: 10px; }
-  .hero { padding: 42px 0 28px; }
   .game-grid { grid-template-columns: 1fr; }
   .game-card { min-height: 280px; }
 }
 
 @media (max-width: 520px) {
   .hub-header { min-height: 56px; }
-  .online-note { font-size: 0; }
-  .hero h1 { font-size: 31px; letter-spacing: .08em; }
-  .hero > p:last-child { max-width: 290px; font-size: 12px; }
   .game-card { grid-template-columns: 38% 62%; min-height: 255px; }
   .card-content { padding: 28px 20px 22px; }
   .card-content h2 { font-size: 24px; }
-  .card-type { margin-bottom: 22px; }
-  .card-content > p:not(.card-type) { font-size: 11px; line-height: 1.7; }
-  .card-number { font-size: 34px; }
+  .card-content > p { font-size: 11px; line-height: 1.7; }
   .number-card { width: 42px; height: 57px; font-size: 17px; }
   .bomb-orb { width: 58px; height: 58px; }
   .preview-stone { width: 22px; height: 22px; }
